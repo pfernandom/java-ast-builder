@@ -1,0 +1,53 @@
+// Basic whitespace handling
+WHITESPACE = _{ " " | "\t" | "\n" | "\r" }
+ident      = @{ ASCII_ALPHANUMERIC ~ (ASCII_ALPHANUMERIC | "_")* }
+
+quot = _{ "\"" }
+
+num_literal = { ASCII_DIGIT+ }
+str_literal = { quot ~ ASCII_ALPHANUMERIC* ~ quot }
+literal     = { str_literal | num_literal }
+
+ident_and_dot = { ident ~ ("." ~ ident)* }
+
+generic_params = {"<" ~ (ty ~ ("," ~ ty)*)? ~ ">"}
+generic_ty = {ident ~ generic_params}
+arr_ty =  {ident ~ "[]"}
+void_ty = {"void"}
+ty         = {   generic_ty | arr_ty | void_ty| ident  }
+
+call_params = { "(" ~ (literal | ident)? ~ ")" }
+call_exp    = { ident_and_dot ~ generic_params? ~ call_params }
+class_exp = {ty ~ ident ~ "=" ~ "new" ~ ty ~ "(" ~ (literal | ident) ~ ")" }
+var_def     = { ty ~ ident ~ "=" ~ (call_exp | literal | ident)}
+return_exp = {"return" ~ (literal | ident |call_exp)}
+
+any_exp = { ANY+ ~ ";" }
+stmt = { (return_exp| class_exp | call_exp | var_def | any_exp) ~ ";" }
+
+block = { "{" ~ stmt* ~ "}" }
+
+access_modifier = { "public" | "private" | "protected" | "default" }
+
+arg  = { ty ~ ident }
+args = { arg ~ ("," ~ arg)* }
+
+annotation  = @{ "@" ~ ident ~ call_params? }
+annotations =  { annotation* }
+
+static_modifier = {"static"}
+
+method = { annotations ~ access_modifier? ~ static_modifier? ~ ty ~ ident ~ "(" ~ args? ~ ")" ~ block }
+
+extends     = { "extends" ~ ident }
+implements  = { "implements" ~ ident ~ ("," ~ ident)* }
+class_block = { "{" ~ method* ~ "}" }
+class       = { annotations? ~ access_modifier? ~ static_modifier? ~ "class" ~ ident ~ extends? ~ implements? ~ class_block ~ ";"? }
+
+import = { "import" ~ ident_and_dot ~ ";" }
+
+package = { "package" ~ ident_and_dot ~ ";" }
+
+imports = { import* }
+
+file = { SOI ~ package? ~ imports ~ class ~ (class*) ~ EOI }
