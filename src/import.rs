@@ -4,6 +4,7 @@ use pest::iterators::Pair;
 
 use crate::{FromNode, Rule};
 
+#[derive(Clone)]
 pub struct Import {
     text: String,
 }

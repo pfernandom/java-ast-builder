@@ -1,0 +1,97 @@
+// Basic whitespace handling
+WHITESPACE = _{ " " | "\t" | "\n" | "\r" }
+COMMENT    = _{ ("//" ~ (!"\n" ~ ANY)*) | ("/*" ~ (!"*/" ~ ANY)* ~ "*/") }
+ident      = @{ WHITESPACE* ~ ("_" | "$")* ~ ASCII_ALPHANUMERIC ~ (ASCII_ALPHANUMERIC | "_")* ~ WHITESPACE* }
+
+quot      = _{ "\"" }
+char_quot = _{ "'" }
+
+static_modifier   = { "static" }
+final_modifier    = { "final" }
+abstract_modifier = { "abstract" }
+new_keyword       = { "new" }
+equals            = { "=" }
+
+num_literal  = @{ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT*)? ~ ("F" | "L")? }
+str_literal  = @{ quot ~ ("\\\"" | (!quot ~ ANY))* ~ quot }
+char_literal = @{ char_quot ~ (!char_quot ~ ANY)* ~ char_quot }
+literal      =  { char_literal | str_literal | num_literal }
+
+dot = { ident ~ &"." ~ ("." ~ ident)* }
+
+value  = { dot | ident | literal }
+object = { dot | ident }
+
+
+// utils
+ends_with_gt = _{(!">" ~ ANY)* ~ ">"}
+
+generic_params = { "<" ~ &ends_with_gt ~ (ty ~ ("," ~ ty)*)? ~ ">" }
+array_params = {"[]"}
+ty             = {  (dot | ident) ~ generic_params? ~ array_params? }
+
+// Mathematical expression
+math_exp    = { ("+" | "-" | "*" | "/") ~ term }
+bool_exp    = { ("==" | "!=" | "<" | ">" | "<=" | ">" | "||" | "&&") ~ term }
+bit_exp     = { ("&" | "|") ~ term }
+ternary_exp = { "?" ~ exp ~ ":" ~ exp}
+call_exp    = { generic_params? ~ "(" ~ exp? ~ ("," ~ exp)* ~ ")" }
+chained_exp = { "." ~ exp }
+exp         = { term ~ (ternary_exp | call_exp | math_exp | bool_exp | bit_exp | chained_exp)* }
+
+chained_term = { "." ~ term }
+term         = { (value | "(" ~ exp ~ ")") }
+
+instance_of_stmt =  {term ~ "instanceof" ~ term}
+assign_stmt  = { object ~ equals ~ new_keyword? ~ exp }
+var_dec_stmt = { ty ~ object ~ (equals ~ new_keyword? ~ exp)? }
+
+stmt = { (instance_of_stmt | var_dec_stmt | assign_stmt | exp) ~ ";" }
+
+stmts = { SOI ~ stmt+ ~ EOI }
+
+
+// Examples:
+
+/**
+int x = 12;
+x = 32;
+int y = (x + 1) / 2;
+x = "ll";
+y = "1" + "v";
+x = ("x") + "x";
+x.1 = 32;
+a.32;
+(1) + 4;
+(x);
+(a + 2).2.34;
+"x".str;
+x()();
+x().x;
+x().x();
+x(123);
+x(123, "");
+x(123, "", 32+12);
+String x;
+List<x> x;
+Map<X,K> x;
+List<x> x = "";
+String x = String();
+String x = new String();
+x == 1;
+x = 1 == 3;
+x = 3 || 3;
+x = 3 || (1 && 3);
+1 | 2;
+x + 3;
+x instanceof 3;
+x<>();
+x = new String();
+x<a,b>();
+x = new List<b>();
+(x)(f.ds);
+int result = (4 + (3 - 2)) * 5;
+x ? y : 3;
+(x==1) ? y : 3;
+(x==1) ? y +32 : 3 - "";
+*/

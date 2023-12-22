@@ -1,53 +1,140 @@
 // Basic whitespace handling
 WHITESPACE = _{ " " | "\t" | "\n" | "\r" }
-ident      = @{ ASCII_ALPHANUMERIC ~ (ASCII_ALPHANUMERIC | "_")* }
+COMMENT    = _{ ("//" ~ (!"\n" ~ ANY)*) | ("/*" ~ (!"*/" ~ ANY)* ~ "*/") }
+ident      = @{ WHITESPACE* ~ ("_" | "$")* ~ ASCII_ALPHANUMERIC ~ (ASCII_ALPHANUMERIC | "_")* ~ WHITESPACE* }
 
-quot = _{ "\"" }
+quot      = _{ "\"" }
+char_quot = _{ "'" }
 
-num_literal = { ASCII_DIGIT+ }
-str_literal = { quot ~ ASCII_ALPHANUMERIC* ~ quot }
-literal     = { str_literal | num_literal }
+static_modifier   = { "static" }
+final_modifier    = { "final" }
+abstract_modifier = { "abstract" }
+new_keyword       = { "new" }
+equals            = { "=" }
+eq_op = {"+=" | "-=" | "/=" | "%=" }
 
-ident_and_dot = { ident ~ ("." ~ ident)* }
+num_literal  = @{ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT*)? ~ ("F" | "L")? }
+str_literal  = @{ quot ~ ("\\\"" | (!quot ~ ANY))* ~ quot }
+char_literal = @{ char_quot ~ (!char_quot ~ ANY)* ~ char_quot }
+literal      =  { char_literal | str_literal | num_literal }
 
-generic_params = {"<" ~ (ty ~ ("," ~ ty)*)? ~ ">"}
-generic_ty = {ident ~ generic_params}
-arr_ty =  {ident ~ "[]"}
-void_ty = {"void"}
-ty         = {   generic_ty | arr_ty | void_ty| ident  }
+dot = { ident ~ &"." ~ ("." ~ ident)* }
 
-call_params = { "(" ~ (literal | ident)? ~ ")" }
-call_exp    = { ident_and_dot ~ generic_params? ~ call_params }
-class_exp = {ty ~ ident ~ "=" ~ "new" ~ ty ~ "(" ~ (literal | ident) ~ ")" }
-var_def     = { ty ~ ident ~ "=" ~ (call_exp | literal | ident)}
-return_exp = {"return" ~ (literal | ident |call_exp)}
+value  = { dot | ident | literal }
+object = { dot | ident }
 
-any_exp = { ANY+ ~ ";" }
-stmt = { (return_exp| class_exp | call_exp | var_def | any_exp) ~ ";" }
+// utils
+ends_with_gt = _{ (!">" ~ ANY)* ~ ">" }
+
+generic_params = { "<" ~ &ends_with_gt ~ (ty ~ ("," ~ ty)*)? ~ ">" }
+array_params   = { "[]" }
+ty             = { (object) ~ generic_params? ~ array_params? }
+
+// expressions
+math_exp    = { ("+" | "-" | "*" | "/" | "%") ~ term }
+bool_exp    = { ("==" | "!=" | "<" | ">" | "<=" | ">" | "||" | "&&") ~ term }
+bit_exp     = { ("&" | "|") ~ term }
+unary_exp = {"--" | "++"}
+cast_exp = {exp}
+ternary_exp = { "?" ~ exp ~ ":" ~ exp }
+array_access_exp = {"[" ~ exp ~ "]"}
+call_exp    = { generic_params? ~ "(" ~ exp? ~ ("," ~ exp)* ~ ")" }
+chained_exp = { "." ~ exp }
+array_exp = {"{" ~ exp ~ ("," ~ exp)* ~ "}"}
+prefix_exp = {("--"  | "++" | "+" | "-" | "!") ~ exp}
+exp         = { (predicate_exp | lambda_exp | array_exp | prefix_exp) | (term ~ (ternary_exp | call_exp | array_access_exp | unary_exp | math_exp | bool_exp | bit_exp | chained_exp | cast_exp)*) }
+
+chained_term = { "." ~ term }
+term         = { (value | "(" ~ exp ~ ")") }
+
+varargs     = { "..." }
+lambda_arg  = { ident | (annotation? ~ final_modifier? ~ ty ~ varargs? ~ ident) }
+lambda_args = { lambda_arg ~ ("," ~ lambda_arg)* }
+lambda_exp  = { (("(" ~ lambda_args? ~ ")") | lambda_arg) ~ "->" ~ (exp | block) }
+
+predicate_exp = { (object) ~ "::" ~ ((object) | predicate_exp) }
+
+// statements
+instance_of_stmt = { term ~ "instanceof" ~ term }
+assign_stmt      = { object ~ (equals | eq_op) ~ new_keyword? ~ exp }
+var_dec_stmt     = { ty ~ object ~ ((equals | eq_op) ~ new_keyword? ~ exp)? }
+return_stmt      = { "return" ~ exp }
+throw_stmt       = { "throw" ~ new_keyword? ~ exp }
+
+// conditionals and loops
+condition = {"(" ~ exp ~ ")"}
+if_stmt = { "if" ~ condition ~ block ~ ("else" ~ "if" ~ condition ~ block)* ~ ("else" ~ block)? }
+
+catch_args = { "(" ~ ty ~ ("|" ~ ty)* ~ ident ~ ")" }
+
+try_stmt = { "try" ~ block ~ ("catch" ~ catch_args ~ block)? ~ ("finally" ~ block)? }
+
+switch_stmt = { "switch" ~ "(" ~ exp ~ ")" ~ switch_block }
+switch_block = {"{" ~ (case_stmt | default_stmt| break_stmt)* ~"}"}
+case_stmt   = { "case" ~ (literal | ident | dot) ~ ":" ~ stmt*}
+default_stmt = { "default:" ~ stmt* }
+break_stmt  = { "break" ~ ";" }
+
+parentheses_content = _{ "(" ~ (parentheses_content | (!")" ~ ANY))* ~ ")" }
+cond                =  { parentheses_content }
+loop_stmt           =  { ("for" | "while") ~ cond ~ block }
+
+static_block = { static_modifier ~ block }
 
 block = { "{" ~ stmt* ~ "}" }
 
+block_stmts = _{if_stmt | loop_stmt | try_stmt | switch_stmt }
+inline_stmtnts = _{
+	( instance_of_stmt | return_stmt | throw_stmt | var_dec_stmt | assign_stmt | exp) ~ ";"
+}
+
+stmt = {block_stmts | inline_stmtnts}
+
+// functions and classes
+
+generic_constraint = { ident ~ (("extends" | "implements" | "super") ~ ("?" | ty | ident))? }
+generic_args       = { "<" ~ (generic_constraint ~ ("," ~ generic_constraint)*)? ~ ">" }
+
+
 access_modifier = { "public" | "private" | "protected" | "default" }
 
-arg  = { ty ~ ident }
-args = { arg ~ ("," ~ arg)* }
 
-annotation  = @{ "@" ~ ident ~ call_params? }
-annotations =  { annotation* }
+arg         = { annotation? ~ final_modifier? ~ ty ~ varargs? ~ ident }
+args        = { arg ~ ("," ~ arg)* }
+method_args = { "(" ~ args? ~ ")" }
 
-static_modifier = {"static"}
+annotation_attr    = { "(" ~ assign_stmt ~ ("," ~ assign_stmt)* ~ ")" }
+annotation_arr_val = { "({" ~ object~ ("," ~ ident | dot)* ~ "})" }
+annotation         = { "@" ~ ident ~ (annotation_arr_val | annotation_attr | call_exp)? }
+annotations        = { annotation* }
 
-method = { annotations ~ access_modifier? ~ static_modifier? ~ ty ~ ident ~ "(" ~ args? ~ ")" ~ block }
+throws = { "throws" ~ object}
 
-extends     = { "extends" ~ ident }
-implements  = { "implements" ~ ident ~ ("," ~ ident)* }
-class_block = { "{" ~ method* ~ "}" }
-class       = { annotations? ~ access_modifier? ~ static_modifier? ~ "class" ~ ident ~ extends? ~ implements? ~ class_block ~ ";"? }
+signature = _{ abstract_modifier? ~ access_modifier? ~ final_modifier? ~ static_modifier? ~ final_modifier? }
 
-import = { "import" ~ ident_and_dot ~ ";" }
+constructor = { annotations ~ signature ~ ident ~ method_args ~ throws? ~ block }
+method      = { annotations ~ signature ~ generic_args? ~ ty ~ ident ~ method_args ~ throws? ~ block? ~ ";"? }
+attribute   = { annotations ~ signature ~ ty ~ (assign_stmt | ident) ~ ";" }
 
-package = { "package" ~ ident_and_dot ~ ";" }
+extends          = { "extends" ~ ty }
+implements       = { "implements" ~ ty ~ ("," ~ ty)* }
+class_block      = { "{" ~ (class | static_block | constructor | method | attribute | enum)* ~ "}" }
+class            = { annotations ~ signature ~ "class" ~ generic_args? ~ ident ~ extends? ~ implements? ~ class_block ~ ";"? }
+interface_block  = { "{" ~ (method)* ~ "}" }
+interface        = { annotations ~ signature ~ "interface" ~ generic_args? ~ ident ~ extends? ~ interface_block ~ ";"? }
+enum_attribute   = { annotations ~ (call_exp | ident) }
+enum_block       = { "{" ~ enum_attribute ~ ("," ~ enum_attribute)* ~ ";" ~ (static_block | constructor | method | attribute)* ~ "}" }
+enum             = { annotations ~ signature ~ "enum" ~ generic_args? ~ ident ~ extends? ~ enum_block ~ ";"? }
+annotation_block = { "{" ~ ((method ~ "default" ~ object~ ";") | method)* ~ "}" }
+annotation_file  = { annotations ~ access_modifier ~ "@interface" ~ ident ~ annotation_block }
+
+import = { "import" ~ static_modifier? ~ dot ~ (".*")? ~ ";" }
+
+package = { "package" ~  (object) ~ ";" }
 
 imports = { import* }
 
-file = { SOI ~ package? ~ imports ~ class ~ (class*) ~ EOI }
+file = { SOI ~ package? ~ imports ~ (class | interface | enum | annotation_file) ~ ((class | interface | enum | annotation_file)*) ~ EOI }
+
+
+//stmts = { SOI ~ stmt+ ~ EOI }

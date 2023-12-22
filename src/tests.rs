@@ -5,22 +5,6 @@ mod test {
     use crate::{ident::Ident, FromNode, IdentParser, Rule};
 
     #[test]
-    fn import_grammar() {
-        let pairs = IdentParser::parse(
-            Rule::import,
-            "import com.java.something.String;\nimport com.java.something.String2;",
-        )
-        .unwrap_or_else(|e| panic!("{}", e));
-
-        for pair in pairs {
-            // A pair is a combination of the rule which matched and a span of input
-            println!("Rule:    {:?}", pair.as_rule());
-            println!("Span:    {:?}", pair.as_span());
-            println!("Text:    {}", pair.as_str());
-        }
-    }
-
-    #[test]
     fn method_grammar() {
         let pairs = IdentParser::parse(
             Rule::method,

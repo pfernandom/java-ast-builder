@@ -5,9 +5,9 @@ use pest::iterators::Pair;
 use crate::{class::ClassDef, import::Import, package::PackageDef, FromNode, Rule};
 
 pub struct FileDef {
-    package: PackageDef,
-    imports: Vec<Import>,
-    classes: Vec<ClassDef>,
+    pub package: PackageDef,
+    pub imports: Vec<Import>,
+    pub classes: Vec<ClassDef>,
 }
 
 impl FromNode for FileDef {
@@ -72,6 +72,22 @@ impl FileDef {
             imports: Vec::new(),
             classes: Vec::new(),
         }
+    }
+
+    pub fn get_namespaced_classes(&self) -> Vec<(String, ClassDef)> {
+        self.classes
+            .iter()
+            .map(|c| {
+                (
+                    format!("{}.{}", self.package.text, c.name.to_string()),
+                    c.clone(),
+                )
+            })
+            .collect::<Vec<_>>()
+    }
+
+    pub fn imports(&self) -> Vec<Import> {
+        self.imports.iter().map(|c| c.clone()).collect::<Vec<_>>()
     }
 }
 

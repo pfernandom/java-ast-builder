@@ -1,0 +1,126 @@
+
+// Basic whitespace handling
+WHITESPACE = _{ " " | "\t" | "\n" | "\r" }
+COMMENT    = _{ ("//" ~ (!"\n" ~ ANY)*) | ("/*" ~ (!"*/" ~ ANY)* ~ "*/") }
+ident      = @{ WHITESPACE* ~ ("_" | "$")* ~ ASCII_ALPHANUMERIC ~ (ASCII_ALPHANUMERIC | "_")* ~ WHITESPACE* }
+
+quot      = _{ "\"" }
+char_quot = _{ "'" }
+
+static_modifier   = { "static" }
+final_modifier    = { "final" }
+abstract_modifier = { "abstract" }
+
+num_literal  = @{ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT*)? ~ ("F" | "L")? }
+str_literal  = @{ quot ~ ("\\\"" | (!quot ~ ANY))* ~ quot }
+char_literal = @{ char_quot ~ (!char_quot ~ ANY)* ~ char_quot }
+literal      =  { char_literal | str_literal | num_literal }
+
+// exp_v2 = {literal | ident}
+
+dot_exp = { ident ~ (generic_params? ~ "." ~ ident)* }
+
+operation = { "+" | "-" | "/" | "*" | "|" | "&" }
+op_exp    = { exp_v2 ~ (operation ~ exp_v2)* }
+
+exp_v2 = { ("(" ~ exp_v2 ~ ")") | (dot_exp | op_exp?) }
+
+ident_and_dot = { ident ~ ("." ~ ident)* }
+
+generic_params = { "<" ~ (ty ~ ("," ~ ty)*)? ~ ">" }
+generic_ty     = { ident_and_dot ~ generic_params }
+arr_ty         = { ident_and_dot ~ "[]" }
+void_ty        = { "void" }
+ty             = { generic_ty | arr_ty | void_ty | ident_and_dot }
+
+generic_constraint = { ident ~ (("extends" | "implements" | "super") ~ ("?" | ty | ident))? }
+generic_args       = { "<" ~ (generic_constraint ~ ("," ~ generic_constraint)*)? ~ ">" }
+
+// statments:
+cast_exp      = { "(" ~ ty ~ ")" }
+base_exp      = { (literal | call_exp | ident_and_dot) ~ (("+" | "-" | "/" | "*" | "|" | "&") ~ base_exp)* }
+predicate_exp = { ident_and_dot ~ "::" ~ (ident_and_dot | predicate_exp) }
+
+lambda_arg  = { ident | (annotation? ~ final_modifier? ~ ty ~ varargs? ~ ident) }
+lambda_args = { lambda_arg ~ ("," ~ lambda_arg)* }
+lambda_exp  = { (("(" ~ lambda_args? ~ ")") | lambda_arg) ~ "->" ~ (exp | block) }
+
+call_params = { "(" ~ (predicate_exp | lambda_exp | exp)? ~ ("," ~ (predicate_exp | lambda_exp | exp))* ~ ")" }
+
+chain_calls = { ident ~ ("." ~ generic_params? ~ ident)* }
+call_exp    = { chain_calls ~ call_params ~ ("." ~ (call_exp | ident_and_dot))* }
+
+class_exp      = { "new" ~ ty ~ call_params ~ ("." ~ call_exp)? }
+groupd_exp     = { cast_exp? ~ "(" ~ exp ~ ")" }
+ternary_exp    = { (bool_expression ~ "?" ~ exp ~ ":" ~ exp) }
+array_init_exp = { "{" ~ (call_exp | exp) ~ ("," ~ (call_exp | exp))* ~ "}" }
+
+exp        = { cast_exp? ~ (class_exp | ternary_exp | groupd_exp | bool_expression | base_exp) }
+var_assign = { ident_and_dot ~ "=" ~ (array_init_exp | exp) }
+var_def    = { final_modifier? ~ ty ~ (var_assign | ident) }
+return_exp = { ("return" | "throw") ~ exp }
+
+eq_exp             = { (call_exp | ident_and_dot | literal) ~ ("==" | "!=" | ">=" | "<=" | ">" | "<") ~ (call_exp | ident_and_dot | literal) }
+bool_expression    = { ("(" ~ bool_expression ~ ")") | ("!"? ~ (eq_exp | base_exp) ~ (("&&" | "||" | "instanceof") ~ bool_expression)*) }
+conditional_params = { "(" ~ bool_expression ~ ")" }
+
+if_stmt = { "if" ~ conditional_params ~ block ~ (("else" ~ "if" ~ conditional_params ~ block)+ | ("else" ~ block))? }
+
+catch_args = { "(" ~ ty ~ ("|" ~ ty)* ~ ident ~ ")" }
+
+try_stmt = { "try" ~ block ~ ("catch" ~ catch_args ~ block)? ~ ("finally" ~ block)? }
+
+switch_stmt = { "switch" ~ "(" ~ exp ~ ")" ~ block }
+case_stmt   = { "case" ~ (literal | ident_and_dot) ~ ":" }
+break_stmt  = { "break" ~ ";" }
+
+parentheses_content = _{ "(" ~ (parentheses_content | (!")" ~ ANY))* ~ ")" }
+cond                =  { parentheses_content }
+loop_stmt           =  { ("for" | "while") ~ cond ~ block }
+
+static_block = { static_modifier ~ block }
+
+stmt = { static_block | switch_stmt | case_stmt | break_stmt | loop_stmt | if_stmt | try_stmt | ((class_exp | return_exp | var_assign | call_exp | var_def | exp) ~ ";") }
+
+// functions and classes
+block = { "{" ~ stmt* ~ "}" }
+
+access_modifier = { "public" | "private" | "protected" | "default" }
+
+varargs     = { "..." }
+arg         = { annotation? ~ final_modifier? ~ ty ~ varargs? ~ ident }
+args        = { arg ~ ("," ~ arg)* }
+method_args = { "(" ~ args? ~ ")" }
+
+annotation_attr    = { "(" ~ var_assign ~ ("," ~ var_assign)* ~ ")" }
+annotation_arr_val = { "({" ~ ident_and_dot ~ ("," ~ ident_and_dot)* ~ "})" }
+annotation         = { "@" ~ ident ~ (annotation_arr_val | annotation_attr | call_params)? }
+annotations        = { annotation* }
+
+throws = { "throws" ~ ident_and_dot }
+
+signature = { abstract_modifier? ~ access_modifier? ~ final_modifier? ~ static_modifier? ~ final_modifier? }
+
+constructor = { annotations ~ signature ~ ident ~ method_args ~ throws? ~ block }
+method      = { annotations ~ signature ~ generic_args? ~ ty ~ ident ~ method_args ~ throws? ~ block? ~ ";"? }
+attribute   = { annotations ~ signature ~ var_def ~ ";" }
+
+extends          = { "extends" ~ ty }
+implements       = { "implements" ~ ty ~ ("," ~ ty)* }
+class_block      = { "{" ~ (class | static_block | constructor | method | attribute | enum)* ~ "}" }
+class            = { annotations ~ signature ~ "class" ~ generic_args? ~ ident ~ extends? ~ implements? ~ class_block ~ ";"? }
+interface_block  = { "{" ~ (method)* ~ "}" }
+interface        = { annotations ~ signature ~ "interface" ~ generic_args? ~ ident ~ extends? ~ interface_block ~ ";"? }
+enum_attribute   = { annotations ~ (call_exp | ident) }
+enum_block       = { "{" ~ enum_attribute ~ ("," ~ enum_attribute)* ~ ";" ~ (static_block | constructor | method | attribute)* ~ "}" }
+enum             = { annotations ~ signature ~ "enum" ~ generic_args? ~ ident ~ extends? ~ enum_block ~ ";"? }
+annotation_block = { "{" ~ ((method ~ "default" ~ ident_and_dot ~ ";") | method)* ~ "}" }
+annotation_file  = { annotations ~ access_modifier ~ "@interface" ~ ident ~ annotation_block }
+
+import = { "import" ~ static_modifier? ~ ident_and_dot ~ (".*")? ~ ";" }
+
+package = { "package" ~ ident_and_dot ~ ";" }
+
+imports = { import* }
+
+file = { SOI ~ package? ~ imports ~ (class | interface | enum | annotation_file) ~ ((class | interface | enum | annotation_file)*) ~ EOI }

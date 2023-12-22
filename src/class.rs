@@ -2,14 +2,21 @@ use std::fmt::Display;
 
 use pest::iterators::Pair;
 
-use crate::{access_modifier::AccessModifier, ident::Ident, method::MethodDef, FromNode, Rule};
+use crate::{
+    access_modifier::AccessModifier, attribute::AttributeDef, ident::Ident, method::MethodDef,
+    type_def::TypeDef, FromNode, Rule,
+};
 
+#[derive(Clone)]
 pub struct ClassDef {
     pub name: Ident,
-    extends: Ident,
-    implements: Vec<Ident>,
-    access_modifier: AccessModifier,
-    methods: Vec<MethodDef>,
+    pub extends: TypeDef,
+    pub is_static: bool,
+    pub implements: Vec<TypeDef>,
+    pub access_modifier: AccessModifier,
+    pub methods: Vec<MethodDef>,
+    pub attributes: Vec<AttributeDef>,
+    pub nested_classes: Vec<ClassDef>,
 }
 
 impl FromNode for ClassDef {
@@ -26,20 +33,22 @@ impl FromNode for ClassDef {
                             let ident = Ident::parse(&imp).unwrap();
                             cls.name = ident;
                         }
+                        Rule::static_modifier => {
+                            cls.is_static = true;
+                        }
                         Rule::extends => {
                             for imp2 in imp.into_inner() {
                                 match imp2.as_rule() {
-                                    Rule::ident => cls.extends = Ident::parse(&imp2).unwrap(),
+                                    Rule::ty => cls.extends = TypeDef::parse(&imp2).unwrap(),
                                     _ => {}
                                 }
                             }
                         }
                         Rule::implements => {
                             for imp2 in imp.into_inner() {
+                                println!("{:?}", imp2.as_rule());
                                 match imp2.as_rule() {
-                                    Rule::ident => {
-                                        cls.implements.push(Ident::parse(&imp2).unwrap())
-                                    }
+                                    Rule::ty => cls.implements.push(TypeDef::parse(&imp2).unwrap()),
                                     _ => {}
                                 }
                             }
@@ -49,6 +58,12 @@ impl FromNode for ClassDef {
                                 match imp2.as_rule() {
                                     Rule::method => {
                                         cls.methods.push(MethodDef::parse(&imp2).unwrap())
+                                    }
+                                    Rule::attribute => {
+                                        cls.attributes.push(AttributeDef::parse(&imp2).unwrap())
+                                    }
+                                    Rule::class => {
+                                        cls.nested_classes.push(ClassDef::parse(&imp2).unwrap())
                                     }
                                     _ => {}
                                 }
@@ -80,15 +95,41 @@ impl Display for ClassDef {
             .map(|i| format!("\n\t\t{}", i))
             .collect::<Vec<_>>()
             .join(",");
+
+        let attrs = self
+            .attributes
+            .iter()
+            .map(|i| i.to_string().replace("\n", "\n\t\t"))
+            .map(|i| format!("\n\t\t{}", i))
+            .collect::<Vec<_>>()
+            .join(",");
+
+        let nested_classes = self
+            .nested_classes
+            .iter()
+            .map(|i| i.to_string().replace("\n", "\n\t\t"))
+            .map(|i| format!("\n\t\t{}", i))
+            .collect::<Vec<_>>()
+            .join(",");
         write!(
             f,
             "class {}
             access_modifier: {},
+            is_static?: {}
             super_class: {},
             interfaces: {},
-            methods: {}
+            attributes: {},
+            methods: {},
+            nested_classes: {}
         ",
-            self.name, self.access_modifier, self.extends, interfaces, methods
+            self.name,
+            self.access_modifier,
+            self.is_static,
+            self.extends,
+            interfaces,
+            attrs,
+            methods,
+            nested_classes
         )
     }
 }
@@ -97,10 +138,13 @@ impl ClassDef {
     fn empty() -> Self {
         Self {
             name: Ident::empty(),
-            extends: Ident::empty(),
+            extends: TypeDef::empty(),
             implements: Vec::new(),
             access_modifier: AccessModifier::Default,
             methods: Vec::new(),
+            attributes: Vec::new(),
+            is_static: false,
+            nested_classes: Vec::new(),
         }
     }
 }
@@ -131,6 +175,15 @@ mod test {
             };
             ",
             "
+            // comment
+            class App {
+                public static void main(String[] args) {
+                    System.out.println(\"My First Java Program\");
+            
+                }
+            };
+            ",
+            "
             class App {
                 public static void main(String[] args) {
                     System.out.println(\"My First Java Program\");
@@ -148,6 +201,28 @@ mod test {
             
                 }
             };
+            ",
+            "
+            public class App extends MyApp2 implements I32, I43 {
+                public static final String SOMETHING = \"Hello\";
+
+                public static void main(String[] args) {
+                    System.out.println(\"My First Java Program\");
+            
+                }
+            };
+            ",
+            "
+            public class C1 {
+                public static class C2 {}
+            }
+            ",
+            "
+            private final static class A
+        extends B
+    {
+
+    }
             ",
         ];
 

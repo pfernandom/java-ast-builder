@@ -4,6 +4,7 @@ use pest::iterators::Pair;
 
 use crate::{FromNode, Rule};
 
+#[derive(Clone)]
 pub struct Ident {
     text: String,
 }
@@ -12,6 +13,9 @@ impl FromNode for Ident {
     fn parse(rule: &Pair<'_, Rule>) -> Option<Self> {
         match rule.as_rule() {
             Rule::ident => Some(Ident {
+                text: rule.as_str().to_string(),
+            }),
+            Rule::dot => Some(Ident {
                 text: rule.as_str().to_string(),
             }),
             _ => None,

@@ -4,6 +4,7 @@ use pest::iterators::Pair;
 
 use crate::{access_modifier::AccessModifier, ident::Ident, FromNode, Rule};
 
+#[derive(Clone)]
 pub struct MethodDef {
     name: Ident,
     static_modifier: bool,
@@ -89,6 +90,12 @@ mod test {
                 false,
                 "main",
             ),
+            (
+                "private void main(String[] arg) throws Exception { }",
+                "private",
+                false,
+                "main",
+            ),
             ("private void my_fn() { }", "private", false, "my_fn"),
         ];
 
@@ -105,6 +112,24 @@ mod test {
                 assert_eq!(method.access_modifier.to_string(), access_mod);
                 assert_eq!(method.static_modifier, static_mod);
                 assert_eq!(method.name.to_string(), fn_name);
+            }
+        }
+    }
+
+    #[test]
+    fn test_grammer2() {
+        let test_cases = vec!["private <K, T extends String> Map<K, A<T>> genMethod() {}"];
+
+        for case in test_cases {
+            let pairs = IdentParser::parse(Rule::method, case).unwrap_or_else(|e| panic!("{}", e));
+
+            for pair in pairs {
+                // A pair is a combination of the rule which matched and a span of input
+                let ident = MethodDef::parse(&pair);
+                assert!(ident.is_some());
+
+                let method = ident.unwrap();
+                println!("{}", method);
             }
         }
     }
